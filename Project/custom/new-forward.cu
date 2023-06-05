@@ -2,7 +2,10 @@
 #include <iostream>
 #include "gpu-new-forward.h"
 
+
 #define TILE_WIDTH 16
+#define MASK_WIDTH 5625
+__constant__ float constantMask[MASK_WIDTH];
 
 __global__ void conv_forward_kernel(float *output, const float *input, const float *mask, const int Batch, const int Map_out, const int Channel, const int Height, const int Width, const int K)
 {
@@ -35,9 +38,11 @@ __global__ void conv_forward_kernel(float *output, const float *input, const flo
 
     #define out_4d(i3, i2, i1, i0) output[(i3) * (Map_out * Height_out * Width_out) + (i2) * (Height_out * Width_out) + (i1) * (Width_out) + i0]
     #define in_4d(i3, i2, i1, i0) input[(i3) * (Channel * Height * Width) + (i2) * (Height * Width) + (i1) * (Width) + i0]
-    #define mask_4d(i3, i2, i1, i0) mask[(i3) * (Channel * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
+    #define mask_4d(i3, i2, i1, i0) constantMask[(i3) * (Channel * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
+
 
     // Insert your GPU convolution kernel code here
+    
     int W_grid = ceil(Width_out / (1.0*TILE_WIDTH));
     int n,m,h,w,c,p,q;
     n = blockIdx.x;
@@ -72,7 +77,7 @@ __host__ void GPUInterface::conv_forward_gpu_prolog(const float *host_output, co
     cudaMalloc((void **)device_mask_ptr,K*K*Channel*Batch*sizeof(float));
     cudaMemcpy(*device_input_ptr,host_input,Width*Height*Channel*Batch*sizeof(float),cudaMemcpyHostToDevice);
     cudaMemcpy(*device_mask_ptr,host_mask,K*K*Channel*Batch*sizeof(float),cudaMemcpyHostToDevice);
-
+    cudaMemcpyToSymbol(constantMask,host_mask,MASK_WIDTH*sizeof(float));
     // We pass double pointers for you to initialize the relevant device pointers,
     //  which are passed to the other two functions.
 
